@@ -10,6 +10,7 @@ from agents.researcher import researcher
 from agents.section_worker import section_worker
 from agents.reducer import reducer
 from utils.blog_saver import save_blog
+from agents.blog_editor import blog_editor
 
 
 class BlogState(TypedDict):
@@ -20,6 +21,8 @@ class BlogState(TypedDict):
     research: dict
     worker_results: Annotated[list[dict], operator.add]
     blog: str
+    citation_valid: bool
+    editor_warnings: list[str]
 
 
 class WorkerState(TypedDict):
@@ -45,7 +48,25 @@ def router_node(state: BlogState):
         "route": decision["route"],
         "route_reason": decision["reason"],
     }
+def blog_editor_node(state):
+    print("\nValidating blog citations...")
 
+    result = blog_editor(
+        blog_content=state["blog"],
+        research=state["research"],
+    )
+
+    for warning in result["warnings"]:
+        print(f"Warning: {warning}")
+
+    if result["citation_valid"]:
+        print("Citation validation passed.")
+
+    return {
+        "blog": result["blog"],
+        "citation_valid": result["citation_valid"],
+        "editor_warnings": result["warnings"],
+    }
 
 # 2. Conditional routing function
 def route_after_router(state: BlogState):
@@ -153,6 +174,7 @@ graph_builder.add_node(
     input_schema=WorkerState,
 )
 graph_builder.add_node("reducer", reducer_node)
+graph_builder.add_node("blog_editor", blog_editor_node)
 
 # Connect the nodes
 graph_builder.add_edge(START, "router")
@@ -172,7 +194,8 @@ graph_builder.add_edge("skip_research", "planner")
 graph_builder.add_conditional_edges("planner", dispatch_workers)
 
 graph_builder.add_edge("section_worker", "reducer")
-graph_builder.add_edge("reducer", END)
+graph_builder.add_edge("reducer", "blog_editor")
+graph_builder.add_edge("blog_editor", END)
 
 graph = graph_builder.compile()
 
