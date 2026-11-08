@@ -23,6 +23,10 @@ import AgentActivity, {
   type SectionWorkerActivity,
 } from './components/AgentActivity'
 import { generateBlogStream, type BlogStreamEvent } from './api/generateBlogStream'
+import { fetchBlogs, fetchBlogDetail, type BlogSummary } from './api/blogs'
+import { MarkdownViewer } from './components/MarkdownViewer'
+import { BlogLibrary } from './components/BlogLibrary'
+import { ImageLibrary } from './components/ImageLibrary'
 
 type Destination = 'Dashboard' | 'Create Blog' | 'Blog Library' | 'Image Library' | 'Settings'
 
@@ -212,34 +216,126 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
   )
 }
 
-function Dashboard({ onCreate, onNavigate }: { onCreate: () => void; onNavigate: (page: Destination) => void }) {
+function Dashboard({ onCreate, onNavigate, onReadBlog }: {
+  onCreate: () => void
+  onNavigate: (page: Destination) => void
+  onReadBlog: (filename: string, title: string) => void
+}) {
+  const [blogs, setBlogs] = useState<BlogSummary[]>([])
+
+  useEffect(() => {
+    fetchBlogs().then(setBlogs)
+  }, [])
+
+  const totalWords = blogs.reduce((acc, b) => acc + Math.round(b.size / 6.5), 0)
+  const recentBlogs = blogs.slice(0, 3)
+
   return (
     <div className="dashboard-page">
       <section className="welcome-row">
-        <div><p className="eyebrow"><span className="status-dot" /> YOUR WRITING DESK</p><h1>Good afternoon,<br /><span>Nishank.</span></h1><p className="welcome-copy">A clear mind and a fresh page. What would you like to write today?</p></div>
-        <button className="button button-primary hero-cta" onClick={onCreate}><span className="cta-icon"><Plus size={19} /></span>Create new blog<ArrowRight size={16} className="cta-arrow" /></button>
+        <div>
+          <p className="eyebrow"><span className="status-dot" /> YOUR WRITING DESK</p>
+          <h1>Good afternoon,<br /><span>Nishank.</span></h1>
+          <p className="welcome-copy">A clear mind and a fresh page. What would you like to write today?</p>
+        </div>
+        <button className="button button-primary hero-cta" onClick={onCreate}>
+          <span className="cta-icon"><Plus size={19} /></span>Create new blog
+          <ArrowRight size={16} className="cta-arrow" />
+        </button>
       </section>
 
       <section className="overview-section">
-        <SectionHeading eyebrow="YOUR ACTIVITY" title="A little overview" action={<button className="text-link" onClick={() => onNavigate('Blog Library')}>View library <ArrowRight size={14} /></button>} />
+        <SectionHeading
+          eyebrow="YOUR ACTIVITY"
+          title="A little overview"
+          action={
+            <button className="text-link" onClick={() => onNavigate('Blog Library')}>
+              View library <ArrowRight size={14} />
+            </button>
+          }
+        />
         <div className="stats-grid">
-          <StatCard label="Your blogs" value="0" note="Your ideas, gathered in one place" icon={FileText} tone="tone-orange" />
-          <StatCard label="Drafts" value="0" note="Thoughts still taking shape" icon={BookOpenText} tone="tone-lilac" />
-          <StatCard label="Published" value="0" note="Stories out in the world" icon={ArrowDownRight} tone="tone-green" />
+          <StatCard
+            label="Your blogs"
+            value={String(blogs.length)}
+            note="Saved permanently on your local disk"
+            icon={FileText}
+            tone="tone-orange"
+          />
+          <StatCard
+            label="Words written"
+            value={totalWords > 0 ? `~${totalWords.toLocaleString()}` : '0'}
+            note="Across all generated stories"
+            icon={BookOpenText}
+            tone="tone-lilac"
+          />
+          <StatCard
+            label="Storage"
+            value="Local"
+            note="Stored in output/blogs/"
+            icon={ArrowDownRight}
+            tone="tone-green"
+          />
         </div>
       </section>
 
       <section className="recent-section">
-        <SectionHeading eyebrow="THE LATEST FROM YOU" title="Recently written" action={<button className="icon-button section-more" aria-label="Open blog library" onClick={() => onNavigate('Blog Library')}><ArrowRight size={17} /></button>} />
-        <div className="recent-panel"><EmptyState onCreate={onCreate} /></div>
+        <SectionHeading
+          eyebrow="THE LATEST FROM YOU"
+          title="Recently written"
+          action={
+            <button
+              className="icon-button section-more"
+              aria-label="Open blog library"
+              onClick={() => onNavigate('Blog Library')}
+            >
+              <ArrowRight size={17} />
+            </button>
+          }
+        />
+        <div className="recent-panel">
+          {recentBlogs.length === 0 ? (
+            <EmptyState onCreate={onCreate} />
+          ) : (
+            <div className="recent-blogs-list">
+              {recentBlogs.map((b) => (
+                <div
+                  key={b.filename}
+                  className="recent-blog-row"
+                  onClick={() => onReadBlog(b.filename, b.title)}
+                >
+                  <div className="recent-blog-info">
+                    <h4 className="recent-blog-title">{b.title}</h4>
+                    <div className="recent-blog-meta">
+                      {b.topic && <span>{b.topic}</span>}
+                      {b.date && <span>• {b.date}</span>}
+                      <span>• ~{Math.round(b.size / 6.5)} words</span>
+                    </div>
+                  </div>
+                  <button
+                    className="button button-secondary recent-blog-btn"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onReadBlog(b.filename, b.title)
+                    }}
+                  >
+                    Read story →
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </section>
     </div>
   )
 }
 
-function CreateBlogPage({ run, onGenerate }: {
+function CreateBlogPage({ run, onGenerate, onReadBlog, onNavigate }: {
   run: GenerationRunState
   onGenerate: (topic: string) => void
+  onReadBlog: (filename: string, title: string) => void
+  onNavigate: (page: Destination) => void
 }) {
   const [topic, setTopic] = useState('')
 
@@ -283,9 +379,25 @@ function CreateBlogPage({ run, onGenerate }: {
         {run.savedFile && (
           <div className="generation-result" role="status" aria-live="polite">
             <CircleCheck size={18} aria-hidden="true" />
-            <div>
-              <strong>{run.savedFile.title ?? 'Blog saved'}</strong>
-              {run.savedFile.path && <span>Saved to <code>{run.savedFile.path}</code></span>}
+            <div className="generation-result-content">
+              <strong>{run.savedFile.title ?? 'Blog saved successfully'}</strong>
+              {run.savedFile.path && <span>Saved to disk at <code>{run.savedFile.path}</code></span>}
+              <div className="generation-result-actions">
+                <button
+                  type="button"
+                  className="button button-primary read-generated-btn"
+                  onClick={() => onReadBlog(run.savedFile?.path ? run.savedFile.path.split(/[/\\]/).pop() || '' : '', run.savedFile?.title || '')}
+                >
+                  <BookOpenText size={15} /> Read Blog Now
+                </button>
+                <button
+                  type="button"
+                  className="button button-secondary"
+                  onClick={() => onNavigate('Blog Library')}
+                >
+                  View in Library →
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -295,17 +407,31 @@ function CreateBlogPage({ run, onGenerate }: {
   )
 }
 
-function DestinationPage({ active }: { active: Exclude<Destination, 'Create Blog'> }) {
-
-  const details: Record<Exclude<Destination, 'Create Blog'>, { kicker: string; title: string; description: string; icon: typeof FileText }> = {
-    Dashboard: { kicker: 'YOUR WRITING DESK', title: 'Dashboard', description: '', icon: LayoutDashboard },
-    'Blog Library': { kicker: 'EVERYTHING YOU’VE WRITTEN', title: 'Your blogs', description: 'Your drafts and published stories will find a home here.', icon: BookOpenText },
-    'Image Library': { kicker: 'A VISUAL COMPANION', title: 'Your image library', description: 'Keep the images that bring your stories to life, all in one place.', icon: FileImage },
-    Settings: { kicker: 'MAKE IT YOURS', title: 'Settings', description: 'Your account and writing preferences will live here.', icon: Settings2 },
+function DestinationPage({ active }: { active: 'Settings' }) {
+  const details = {
+    Settings: {
+      kicker: 'MAKE IT YOURS',
+      title: 'Settings',
+      description: 'Your studio runs locally on your machine with Gemini Free Tier and Wikimedia Commons.',
+      icon: Settings2,
+    },
   }
   const detail = details[active]
   const Icon = detail.icon
-  return <div className="subpage"><p className="eyebrow"><span className="status-dot" /> {detail.kicker}</p><div className="subpage-card"><div className="subpage-icon"><Icon size={21} /></div><h1>{detail.title}</h1><p>{detail.description}</p><div className="coming-soon"><span className="coming-dot" /><Check size={13} /> WORKSPACE READY</div></div></div>
+  return (
+    <div className="subpage">
+      <p className="eyebrow"><span className="status-dot" /> {detail.kicker}</p>
+      <div className="subpage-card">
+        <div className="subpage-icon"><Icon size={21} /></div>
+        <h1>{detail.title}</h1>
+        <p>{detail.description}</p>
+        <div className="coming-soon">
+          <span className="coming-dot" />
+          <Check size={13} /> LOCAL WORKSPACE CONNECTED
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function App() {
@@ -313,9 +439,19 @@ function App() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [backendStatus, setBackendStatus] = useState<BackendStatus>('checking')
   const [generationRun, setGenerationRun] = useState<GenerationRunState>(initialGenerationRun)
+  const [activeArticle, setActiveArticle] = useState<{ content: string; title?: string; filename?: string } | null>(null)
   const activeStream = useRef<AbortController | null>(null)
 
   useEffect(() => () => activeStream.current?.abort(), [])
+
+  const handleReadBlog = async (filename: string, title?: string) => {
+    const cleanFilename = filename.split(/[/\\]/).pop() || filename
+    if (!cleanFilename) return
+    const content = await fetchBlogDetail(cleanFilename)
+    if (content) {
+      setActiveArticle({ content, title, filename: cleanFilename })
+    }
+  }
 
   const handleGenerate = async (topic: string) => {
     const trimmedTopic = topic.trim()
@@ -432,10 +568,45 @@ function App() {
   }, [])
 
   const navigate = (page: Destination) => setActive(page)
+
   return (
     <div className="app-shell">
       <Sidebar active={active} onNavigate={navigate} open={menuOpen} onClose={() => setMenuOpen(false)} />
-      <main className="main-column"><PageHeader onMenu={() => setMenuOpen(true)} active={active} backendStatus={backendStatus} />{active === 'Dashboard' ? <Dashboard onCreate={() => navigate('Create Blog')} onNavigate={navigate} /> : active === 'Create Blog' ? <CreateBlogPage run={generationRun} onGenerate={handleGenerate} /> : <DestinationPage active={active} />}</main>
+      <main className="main-column">
+        <PageHeader onMenu={() => setMenuOpen(true)} active={active} backendStatus={backendStatus} />
+        {active === 'Dashboard' ? (
+          <Dashboard
+            onCreate={() => navigate('Create Blog')}
+            onNavigate={navigate}
+            onReadBlog={handleReadBlog}
+          />
+        ) : active === 'Create Blog' ? (
+          <CreateBlogPage
+            run={generationRun}
+            onGenerate={handleGenerate}
+            onReadBlog={handleReadBlog}
+            onNavigate={navigate}
+          />
+        ) : active === 'Blog Library' ? (
+          <BlogLibrary
+            onSelectBlog={handleReadBlog}
+            onCreateNew={() => navigate('Create Blog')}
+          />
+        ) : active === 'Image Library' ? (
+          <ImageLibrary />
+        ) : (
+          <DestinationPage active="Settings" />
+        )}
+      </main>
+
+      {activeArticle && (
+        <MarkdownViewer
+          content={activeArticle.content}
+          title={activeArticle.title}
+          filename={activeArticle.filename}
+          onClose={() => setActiveArticle(null)}
+        />
+      )}
     </div>
   )
 }
