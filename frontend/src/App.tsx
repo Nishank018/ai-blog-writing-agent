@@ -216,6 +216,32 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
   )
 }
 
+function getDynamicGreeting(): { greeting: string; subtitle: string } {
+  const hour = new Date().getHours()
+  if (hour >= 5 && hour < 12) {
+    return {
+      greeting: 'Good morning',
+      subtitle: 'A fresh morning and a clear page. What would you like to write today?',
+    }
+  }
+  if (hour >= 12 && hour < 17) {
+    return {
+      greeting: 'Good afternoon',
+      subtitle: 'A clear mind and a productive afternoon. What would you like to write today?',
+    }
+  }
+  if (hour >= 17 && hour < 22) {
+    return {
+      greeting: 'Good evening',
+      subtitle: 'The evening is quiet and full of ideas. What would you like to write tonight?',
+    }
+  }
+  return {
+    greeting: 'Good night',
+    subtitle: 'Late night writing brings out the best stories. What is on your mind?',
+  }
+}
+
 function Dashboard({ onCreate, onNavigate, onReadBlog }: {
   onCreate: () => void
   onNavigate: (page: Destination) => void
@@ -229,14 +255,15 @@ function Dashboard({ onCreate, onNavigate, onReadBlog }: {
 
   const totalWords = blogs.reduce((acc, b) => acc + Math.round(b.size / 6.5), 0)
   const recentBlogs = blogs.slice(0, 3)
+  const { greeting, subtitle } = getDynamicGreeting()
 
   return (
     <div className="dashboard-page">
       <section className="welcome-row">
         <div>
           <p className="eyebrow"><span className="status-dot" /> YOUR WRITING DESK</p>
-          <h1>Good afternoon,<br /><span>Nishank.</span></h1>
-          <p className="welcome-copy">A clear mind and a fresh page. What would you like to write today?</p>
+          <h1>{greeting},<br /><span>Nishank.</span></h1>
+          <p className="welcome-copy">{subtitle}</p>
         </div>
         <button className="button button-primary hero-cta" onClick={onCreate}>
           <span className="cta-icon"><Plus size={19} /></span>Create new blog
