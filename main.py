@@ -11,6 +11,7 @@ from agents.section_worker import section_worker
 from agents.reducer import reducer
 from utils.blog_saver import save_blog
 from agents.blog_editor import blog_editor
+from utils.image_pipeline import add_images_to_blog
 
 
 class BlogState(TypedDict):
@@ -23,6 +24,8 @@ class BlogState(TypedDict):
     blog: str
     citation_valid: bool
     editor_warnings: list[str]
+    images: list[dict]
+    image_warning: str | None
 
 
 class WorkerState(TypedDict):
@@ -66,6 +69,21 @@ def blog_editor_node(state):
         "blog": result["blog"],
         "citation_valid": result["citation_valid"],
         "editor_warnings": result["warnings"],
+    }
+
+def image_pipeline_node(state: BlogState):
+    print("\nAdding images to the blog...")
+
+    result = add_images_to_blog(
+        topic=state["topic"],
+        blog_content=state["blog"],
+        max_images=3,
+    )
+
+    return {
+        "blog": result["blog"],
+        "images": result["images"],
+        "image_warning": result["warning"],
     }
 
 # 2. Conditional routing function
@@ -175,6 +193,7 @@ graph_builder.add_node(
 )
 graph_builder.add_node("reducer", reducer_node)
 graph_builder.add_node("blog_editor", blog_editor_node)
+graph_builder.add_node("image_pipeline", image_pipeline_node)
 
 # Connect the nodes
 graph_builder.add_edge(START, "router")
@@ -195,7 +214,8 @@ graph_builder.add_conditional_edges("planner", dispatch_workers)
 
 graph_builder.add_edge("section_worker", "reducer")
 graph_builder.add_edge("reducer", "blog_editor")
-graph_builder.add_edge("blog_editor", END)
+graph_builder.add_edge("blog_editor", "image_pipeline")
+graph_builder.add_edge("image_pipeline", END)
 
 graph = graph_builder.compile()
 
