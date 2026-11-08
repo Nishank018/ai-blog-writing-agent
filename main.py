@@ -26,6 +26,7 @@ class BlogState(TypedDict):
     editor_warnings: list[str]
     images: list[dict]
     image_warning: str | None
+    worker_errors: Annotated[list[dict], operator.add]
 
 
 class WorkerState(TypedDict):
@@ -88,10 +89,13 @@ def image_pipeline_node(state: BlogState):
 
 # 2. Conditional routing function
 def route_after_router(state: BlogState):
-    if state["route"] == "closed_book":
+    route = state.get("route")
+    if route == "closed_book":
         return "skip_research"
+    if route in {"hybrid", "open_book"}:
+        return "researcher"
 
-    return "researcher"
+    raise ValueError("Router returned an unsupported route.")
 
 
 # 3. Skip research for closed-book topics
@@ -142,7 +146,7 @@ def dispatch_workers(state: BlogState):
                     "research": state["research"],
                     "worker_id": worker_id,
                     "audience": state["plan"]["audience"],
-                    "tone": state["plan"]["tone"], 
+                    "tone": state["plan"]["tone"],
                 },
             )
         )
@@ -152,30 +156,49 @@ def dispatch_workers(state: BlogState):
 
 # 7. Worker node
 def section_worker_node(state: WorkerState):
-    print(f"\nWorker {state['worker_id'] + 1} is writing...")
+    worker_id = state.get("worker_id", 0)
+    # Stagger parallel workers slightly to prevent free-tier concurrency rate limits
+    if worker_id > 0:
+        import time
+        time.sleep(worker_id * 1.5)
 
-    content = section_worker(
-    title=state["title"],
-    topic=state["topic"],
-    sections=state["sections"],
-    research=state["research"],
-    audience=state["audience"],
-    tone=state["tone"],
-)
-    return {
-        "worker_results": [
-            {
-                "worker_id": state["worker_id"],
-                "content": content,
-            }
-        ]
-    }
+    print(f"\nWorker {worker_id + 1} is writing...")
+
+    from utils.worker_outcomes import capture_worker_outcome
+
+    outcome = capture_worker_outcome(
+        state["worker_id"],
+        lambda: section_worker(
+            title=state["title"],
+            topic=state["topic"],
+            sections=state["sections"],
+            research=state["research"],
+            audience=state["audience"],
+            tone=state["tone"],
+        ),
+    )
+    if outcome["status"] == "error":
+        print(f"Worker {state['worker_id'] + 1} failed ({outcome['category']}).")
+        return {"worker_errors": [outcome]}
+
+    return {"worker_results": [{"worker_id": state["worker_id"], "content": outcome["content"]}]}
+
+
+def worker_gate_node(state: BlogState):
+    """Fail only after every parallel section worker has returned an outcome."""
+    from utils.worker_outcomes import ensure_workers_succeeded
+
+    ensure_workers_succeeded(state.get("worker_errors", []))
+    return {}
 
 
 # 8. Reducer node
 def reducer_node(state: BlogState):
     print("\nCombining worker results...")
-    final_blog = reducer(state["worker_results"])
+    final_blog = reducer(
+        state["worker_results"],
+        expected_sections=state["plan"]["sections"],
+    )
     return {"blog": final_blog}
 
 
@@ -191,6 +214,7 @@ graph_builder.add_node(
     section_worker_node,
     input_schema=WorkerState,
 )
+graph_builder.add_node("worker_gate", worker_gate_node)
 graph_builder.add_node("reducer", reducer_node)
 graph_builder.add_node("blog_editor", blog_editor_node)
 graph_builder.add_node("image_pipeline", image_pipeline_node)
@@ -212,7 +236,8 @@ graph_builder.add_edge("skip_research", "planner")
 
 graph_builder.add_conditional_edges("planner", dispatch_workers)
 
-graph_builder.add_edge("section_worker", "reducer")
+graph_builder.add_edge("section_worker", "worker_gate")
+graph_builder.add_edge("worker_gate", "reducer")
 graph_builder.add_edge("reducer", "blog_editor")
 graph_builder.add_edge("blog_editor", "image_pipeline")
 graph_builder.add_edge("image_pipeline", END)

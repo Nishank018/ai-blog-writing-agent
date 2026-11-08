@@ -1,17 +1,23 @@
 
 import os
 from dotenv import load_dotenv
-from langchain_groq import ChatGroq
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 load_dotenv()
 
-api_key = os.getenv("GROQ_API_KEY")
+api_key = os.getenv("GEMINI_API_KEY")
 
 if not api_key:
-    raise ValueError("GROQ_API_KEY not found in .env")
+    raise ValueError("GEMINI_API_KEY not found in .env")
 
-llm = ChatGroq(
-    model="openai/gpt-oss-20b",
-    temperature=0.7,
-    max_retries=2
+# Use gemini-3.5-flash: active, fast, free-tier model with separate daily quota.
+# api_version="v1beta" is required for JSON mode and structured output in Google GenAI SDK.
+model_name = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
+
+llm = ChatGoogleGenerativeAI(
+    model=model_name,
+    api_key=api_key,
+    api_version="v1beta",
+    timeout=45,
+    max_retries=1,
 )

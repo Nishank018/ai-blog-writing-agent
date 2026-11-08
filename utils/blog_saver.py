@@ -85,7 +85,9 @@ def save_blog(
     timestamp = datetime.now()
     slug = make_slug(title)
 
-    filename = f"{slug}_{timestamp.strftime('%Y%m%d_%H%M%S')}.md"
+    if not slug:
+        slug = "blog"
+    filename_base = f"{slug}_{timestamp.strftime('%Y%m%d_%H%M%S')}"
 
     project_root = Path(__file__).resolve().parent.parent
     output_folder = project_root / "output" / "blogs"
@@ -156,8 +158,16 @@ keywords: {json.dumps(keywords, ensure_ascii=False)}
 {sources_content}
 """
 
-    file_path = output_folder / filename
-    file_path.write_text(markdown_content, encoding="utf-8")
+    collision_number = 0
+    while True:
+        suffix = "" if collision_number == 0 else f"_{collision_number + 1}"
+        file_path = output_folder / f"{filename_base}{suffix}.md"
+        try:
+            with file_path.open("x", encoding="utf-8") as blog_file:
+                blog_file.write(markdown_content)
+            break
+        except FileExistsError:
+            collision_number += 1
 
     return str(file_path)
 

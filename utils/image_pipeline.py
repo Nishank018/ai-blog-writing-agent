@@ -22,12 +22,12 @@ def add_images_to_blog(
             query=topic,
             limit=min(max(max_images * 2, 1), 10),
         )
-    except Exception as error:
-        print(f"Image search skipped: {error}")
+    except Exception:
+        print("Image search skipped; continuing without images.")
         return {
             "blog": blog_content,
             "images": [],
-            "warning": str(error),
+            "warning": "Image search was unavailable; the blog was saved without images.",
         }
 
     selected_images = []
@@ -42,9 +42,9 @@ def add_images_to_blog(
             selected_images.append(result)
             print(f"Downloaded: {candidate.get('title', 'Image')}")
 
-        except Exception as error:
-            warnings.append(str(error))
-            print(f"Skipping image: {error}")
+        except Exception:
+            warnings.append("One or more images could not be downloaded.")
+            print("Skipping an image that could not be downloaded.")
 
     if not selected_images:
         return {

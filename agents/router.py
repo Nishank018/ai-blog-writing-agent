@@ -17,11 +17,12 @@ class RouteDecision(BaseModel):
     )
 
     reason: str = Field(
+        min_length=1,
         description="A short explanation for the routing decision."
     )
 
 
-# Configure Groq to return validated structured output
+# Configure Gemini to return validated structured output
 router_model = llm.with_structured_output(
     RouteDecision,
     method="json_schema",
@@ -77,6 +78,8 @@ def router(topic: str) -> dict:
     """
 
     decision = router_model.invoke(prompt)
+    if not decision.reason.strip():
+        raise ValueError("Router returned an empty reason.")
 
     return decision.model_dump()
 

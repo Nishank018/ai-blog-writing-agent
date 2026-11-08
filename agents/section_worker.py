@@ -75,7 +75,7 @@ def section_worker(
     1. Write only your assigned sections.
     2. Cover every provided key point.
     3. Aim for the target word count.
-    4. Use clear Markdown headings.
+    4. Use each provided section title verbatim as a Markdown heading.
     5. Maintain the requested tone and audience level.
     6. Avoid repeating information.
     7. Use research evidence when relevant.
@@ -93,4 +93,4 @@ def section_worker(
 
     response = llm.invoke(prompt)
 
-    return response.content
+    return response.text

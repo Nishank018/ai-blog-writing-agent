@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+@theme {
+  --color-paper: #faf9f7;
+  --color-ink: #171717;
+  --color-accent: #e65b16;
+  --color-line: #dadada;
+  --font-sans: "DM Sans", "Avenir Next", Avenir, sans-serif;
+  --font-mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+}
+
+:root {
+  font-family: var(--font-sans);
+  color: #171717;
+  background: #faf9f7;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-optical-sizing: auto;
+  font-weight: 400;
+  font-size: 14px;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; min-height: 100vh; }
+button { font: inherit; }
+button:focus-visible { outline: 2px solid #e65b16; outline-offset: 3px; }
+::selection { background: #f8d8c8; color: #171717; }

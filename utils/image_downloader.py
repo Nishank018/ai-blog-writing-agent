@@ -1,16 +1,21 @@
 
 import json
+import os
 import re
+import tempfile
+from threading import Lock
 from pathlib import Path
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 
 MAX_IMAGE_SIZE = 15 * 1024 * 1024  # 15 MB
+_manifest_lock = Lock()
 
 ALLOWED_HOSTS = {
     "commons.wikimedia.org",
     "upload.wikimedia.org",
+    "thumb.wikimedia.org",
 }
 
 IMAGE_EXTENSIONS = {
@@ -89,9 +94,18 @@ def download_image(image: dict) -> dict:
         IMAGE_EXTENSIONS[content_type],
         output_folder,
     )
-
-    image_path = output_folder / filename
-    image_path.write_bytes(image_data)
+    extension = IMAGE_EXTENSIONS[content_type]
+    stem = filename[:-len(extension)]
+    collision_number = 2
+    while True:
+        image_path = output_folder / filename
+        try:
+            with image_path.open("xb") as image_file:
+                image_file.write(image_data)
+            break
+        except FileExistsError:
+            filename = f"{stem[:75]}-{collision_number}{extension}"
+            collision_number += 1
 
     attribution = {
         "filename": filename,
@@ -104,17 +118,33 @@ def download_image(image: dict) -> dict:
 
     manifest_path = output_folder / "image_attributions.json"
 
-    if manifest_path.exists():
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    else:
-        manifest = []
+    with _manifest_lock:
+        if manifest_path.exists():
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            if not isinstance(manifest, list):
+                raise ValueError("Image attribution manifest is invalid.")
+        else:
+            manifest = []
 
-    manifest.append(attribution)
-
-    manifest_path.write_text(
-        json.dumps(manifest, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
+        manifest.append(attribution)
+        temp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                dir=output_folder,
+                prefix=".image-attributions-",
+                suffix=".tmp",
+                delete=False,
+            ) as manifest_file:
+                temp_path = Path(manifest_file.name)
+                json.dump(manifest, manifest_file, indent=2, ensure_ascii=False)
+                manifest_file.flush()
+                os.fsync(manifest_file.fileno())
+            os.replace(temp_path, manifest_path)
+        finally:
+            if temp_path is not None and temp_path.exists():
+                temp_path.unlink()
 
     return {
         "path": str(image_path),

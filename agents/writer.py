@@ -31,7 +31,7 @@ def writer(blog_plan: dict, research: dict) -> str:
 
     response = llm.invoke(prompt)
 
-    return response.content
+    return response.text
 
 
 if __name__ == "__main__":
